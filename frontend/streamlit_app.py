@@ -1,15 +1,33 @@
-import requests
+import os
+import sys
+
+# Make the repo root importable so `backend` resolves when Streamlit runs this file.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import streamlit as st
 import pandas as pd
 import graphviz
-
-
-API_URL = "http://127.0.0.1:8000"
 
 st.set_page_config(
     page_title="FinGraph AI",
     page_icon="📊",
     layout="wide"
+)
+
+# On Streamlit Cloud, secrets live in st.secrets. Copy them into the environment
+# BEFORE importing backend modules (backend/config.py reads keys from the env).
+try:
+    for _k in ("PINECONE_API_KEY", "PINECONE_INDEX_NAME", "GROQ_API_KEY", "GROQ_MODEL"):
+        if _k in st.secrets:
+            os.environ.setdefault(_k, str(st.secrets[_k]))
+except Exception:
+    pass
+
+from backend.service import (
+    get_companies,
+    run_compare,
+    run_compare_kg,
+    run_compare_fusion,
 )
 
 st.markdown("""
@@ -101,10 +119,9 @@ def get_sentiment_df(nlp):
 
 
 try:
-    companies_response = requests.get(f"{API_URL}/companies")
-    companies = companies_response.json()["companies"]
-except Exception:
-    st.error("Backend is not running. Start FastAPI first.")
+    companies = get_companies()["companies"]
+except Exception as e:
+    st.error(f"Could not load data / connect to Pinecone. Check your API keys in Secrets. ({e})")
     st.stop()
 
 if not companies:
@@ -195,29 +212,17 @@ if compare_clicked:
         st.warning("Please select two different companies.")
         st.stop()
 
-    if mode == "RAG":
-        endpoint = "/compare"
-    elif mode == "KG":
-        endpoint = "/compare-kg"
-    else:
-        endpoint = "/compare-fusion"
-
     with st.spinner(f"Running {mode} analysis..."):
-        response = requests.post(
-            f"{API_URL}{endpoint}",
-            json={
-                "company_a": company_a,
-                "company_b": company_b,
-                "question": question
-            }
-        )
-
-    if response.status_code != 200:
-        st.error(f"Backend error: {response.status_code}")
-        st.write(response.text)
-        st.stop()
-
-    result = response.json()
+        try:
+            if mode == "RAG":
+                result = run_compare(company_a, company_b, question)
+            elif mode == "KG":
+                result = run_compare_kg(company_a, company_b, question)
+            else:
+                result = run_compare_fusion(company_a, company_b, question)
+        except Exception as e:
+            st.error(f"Analysis failed: {e}")
+            st.stop()
 
     st.divider()
 

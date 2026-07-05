@@ -105,8 +105,23 @@ See [`.env.example`](.env.example):
 | `GROQ_API_KEY`        | Groq API key                             |
 | `GROQ_MODEL`          | Groq model (default `llama-3.1-8b-instant`) |
 
+## Deploy (single-process, Streamlit Community Cloud)
+
+The Streamlit UI can call the RAG service directly (via `backend/service.py`), so no
+separate FastAPI process is required for deployment.
+
+1. Push to GitHub.
+2. On [share.streamlit.io](https://share.streamlit.io): New app → this repo → branch `main`
+   → **main file `frontend/streamlit_app.py`**.
+3. In the app's **Settings → Secrets**, paste the values from
+   [`.streamlit/secrets.toml.example`](.streamlit/secrets.toml.example)
+   (your Pinecone + Groq keys). The Pinecone index must already be populated
+   (`python -m backend.index_docs`).
+
+The FastAPI app (`backend/main.py`) still works for local/API use and shares the same
+service layer.
+
 ## Roadmap
 
 - [ ] Retrieval evaluation harness (faithfulness / hit-rate on a labeled Q&A set)
 - [ ] Real Neo4j-backed knowledge graph (replacing in-memory entity aggregation)
-- [ ] Live deployment (Streamlit Community Cloud / Render)
